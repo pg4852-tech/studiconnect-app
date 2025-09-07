@@ -2,11 +2,16 @@
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>StudiConnect - Online Group Study (Fixed)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StudiConnect - Online Group Study (Patched with WebRTC + Firebase)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/phosphor-icons"></script>
+
+    <!-- Firebase (compat) libs used for quick prototyping with Firestore signaling -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
     <style>
         body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
         .hidden { display: none !important; }
@@ -51,6 +56,7 @@
     // #################################################################
     const STORAGE_KEY = 'studiConnectState';
     let mockState;
+
     function loadStateFromStorage() {
         const storedState = localStorage.getItem(STORAGE_KEY);
         if (storedState) {
@@ -68,23 +74,15 @@
             saveStateToStorage();
         }
     }
+
     function saveStateToStorage() { localStorage.setItem(STORAGE_KEY, JSON.stringify(mockState)); }
 
     // Listen for changes from other tabs
     window.addEventListener('storage', (event) => {
         if (event.key === STORAGE_KEY) {
-            try {
-                mockState = JSON.parse(event.newValue);
-            } catch (e) {
-                console.error('Failed parsing updated storage', e);
-                return;
-            }
-            if (currentRoomId && mockState.rooms && mockState.rooms[currentRoomId]) {
-                // Update participants display when room changed in other tab
-                renderParticipants();
-            } else if (document.getElementById('dashboard-view')) {
-                renderPublicRooms();
-            }
+            try { mockState = JSON.parse(event.newValue); } catch (e) { console.error('Failed parsing updated storage', e); return; }
+            if (currentRoomId && mockState.rooms && mockState.rooms[currentRoomId]) { renderParticipants(); }
+            else if (document.getElementById('dashboard-view')) { renderPublicRooms(); }
         }
     });
 
@@ -214,24 +212,26 @@
     // #################################################################
     // #####                  UI RENDERING & LOGIC                 #####
     // #################################################################
+
+    // --- App State ---
     let localStream;
     let currentRoomId = null;
     let timerInterval;
     let isDrawing = false;
-    let participantStates = {}; // keys normalized to strings
+    let participantStates = {}; // { id: { micOn: true, camOn: true, handRaised: false } }
 
+    // --- Core UI Functions ---
     function renderView(template) { appContainer.innerHTML = template; }
+
     function showToast(message, type = 'success') {
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
         toast.innerHTML = `<i class="ph ${type === 'success' ? 'ph-check-circle' : 'ph-x-circle'}"></i><span>${message}</span>`;
         toastContainer.appendChild(toast);
         setTimeout(() => toast.classList.add('show'), 10);
-        setTimeout(() => {
-            toast.classList.remove('show');
-            toast.addEventListener('transitionend', () => toast.remove());
-        }, 3000);
+        setTimeout(() => { toast.classList.remove('show'); toast.addEventListener('transitionend', () => toast.remove()); }, 3000);
     }
+
     function createModal(id, title, content, footer) {
         const modal = document.createElement('div');
         modal.id = id;
@@ -251,71 +251,26 @@
     }
 
     // --- Authentication Flow ---
-    function initAuth() {
-        renderView(templates.login);
-        document.getElementById('login-form').onsubmit = handleLogin;
-        document.getElementById('show-signup').onclick = (e) => { e.preventDefault(); initSignup(); };
-    }
-    function initSignup() {
-        renderView(templates.signup);
-        document.getElementById('signup-form').onsubmit = handleSignup;
-        document.getElementById('show-login').onclick = (e) => { e.preventDefault(); initAuth(); };
-    }
-    function handleLogin(e) {
-        e.preventDefault();
-        const email = e.target.elements['login-email'].value;
-        const password = e.target.elements['login-password'].value;
-        const user = mockState.users.find(u => u.email === email && u.password === password);
-        const errorEl = document.getElementById('login-error');
-        if (user) {
-            mockState.currentUser = user;
-            saveStateToStorage();
-            initDashboard();
-        } else {
-            errorEl.textContent = 'Invalid email or password.';
-            errorEl.classList.remove('hidden');
-        }
-    }
-    function handleSignup(e) {
-        e.preventDefault();
-        const name = e.target.elements['signup-name'].value;
-        const email = e.target.elements['signup-email'].value;
-        const password = e.target.elements['signup-password'].value;
-        const errorEl = document.getElementById('signup-error');
-        if (mockState.users.find(u => u.email === email)) {
-            errorEl.textContent = 'An account with this email already exists.';
-            errorEl.classList.remove('hidden');
-        } else {
-            // use nextUserId and increment once
-            const id = mockState.nextUserId++;
-            mockState.users.push({ id, name, email, password });
-            saveStateToStorage();
-            showToast('Account created! Please log in.');
-            initAuth();
-        }
-    }
+    function initAuth() { renderView(templates.login); document.getElementById('login-form').onsubmit = handleLogin; document.getElementById('show-signup').onclick = (e) => { e.preventDefault(); initSignup(); }; }
+    function initSignup() { renderView(templates.signup); document.getElementById('signup-form').onsubmit = handleSignup; document.getElementById('show-login').onclick = (e) => { e.preventDefault(); initAuth(); }; }
+    function handleLogin(e) { e.preventDefault(); const email = e.target.elements['login-email'].value; const password = e.target.elements['login-password'].value; const user = mockState.users.find(u => u.email === email && u.password === password); const errorEl = document.getElementById('login-error'); if (user) { mockState.currentUser = user; saveStateToStorage(); initDashboard(); } else { errorEl.textContent = 'Invalid email or password.'; errorEl.classList.remove('hidden'); } }
+    function handleSignup(e) { e.preventDefault(); const name = e.target.elements['signup-name'].value; const email = e.target.elements['signup-email'].value; const password = e.target.elements['signup-password'].value; const errorEl = document.getElementById('signup-error'); if (mockState.users.find(u => u.email === email)) { errorEl.textContent = 'An account with this email already exists.'; errorEl.classList.remove('hidden'); } else { const id = mockState.nextUserId++; mockState.users.push({ id, name, email, password }); saveStateToStorage(); showToast('Account created! Please log in.'); initAuth(); } }
 
     // --- Dashboard Flow ---
     function initDashboard() {
         renderView(templates.dashboard);
         document.getElementById('user-name-display').textContent = mockState.currentUser.name;
-        document.getElementById('logout-btn').onclick = () => {
-            mockState.currentUser = null;
-            saveStateToStorage();
-            initAuth();
-        };
+        document.getElementById('logout-btn').onclick = () => { mockState.currentUser = null; saveStateToStorage(); initAuth(); };
         document.getElementById('create-room-btn').onclick = showCreateRoomModal;
         document.getElementById('join-room-btn').onclick = handleJoinRoomAttempt;
         renderPublicRooms();
     }
+
     function renderPublicRooms() {
         const listContainer = document.getElementById('public-rooms-list');
         if (!listContainer) return;
         const publicRooms = Object.entries(mockState.rooms).filter(([id, room]) => !room.password);
-        if (publicRooms.length === 0) {
-            listContainer.innerHTML = `<p class="text-gray-400 text-center py-4">No public rooms are active. Why not start one?</p>`;
-            return;
-        }
+        if (publicRooms.length === 0) { listContainer.innerHTML = `<p class="text-gray-400 text-center py-4">No public rooms are active. Why not start one?</p>`; return; }
         listContainer.innerHTML = '';
         publicRooms.forEach(([roomId, room]) => {
             const roomElement = document.createElement('div');
@@ -329,10 +284,9 @@
             `;
             listContainer.appendChild(roomElement);
         });
-        document.querySelectorAll('.join-public-room-btn').forEach(btn => {
-            btn.onclick = (e) => { const id = e.currentTarget.dataset.roomId; initLobby(id); };
-        });
+        document.querySelectorAll('.join-public-room-btn').forEach(btn => { btn.onclick = (e) => { const id = e.currentTarget.dataset.roomId; initLobby(id); }; });
     }
+
     function showCreateRoomModal() {
         const modal = createModal('create-room-modal', 'Create Study Room',
             `<div class="space-y-4">
@@ -349,6 +303,7 @@
             initLobby(newRoomId);
         };
     }
+
     function handleJoinRoomAttempt() {
         const roomId = document.getElementById('room-code-input').value.trim().toUpperCase();
         if (!roomId) return;
@@ -361,10 +316,11 @@
             );
             modal.querySelector('#submit-password-btn').onclick = () => {
                 const enteredPassword = modal.querySelector('#join-password-input').value;
-                if (enteredPassword === room.password) { modal.remove(); initLobby(roomId); }
-                else showToast('Incorrect password.', 'error');
+                if (enteredPassword === room.password) { modal.remove(); initLobby(roomId); } else { showToast('Incorrect password.', 'error'); }
             };
-        } else initLobby(roomId);
+        } else {
+            initLobby(roomId);
+        }
     }
 
     // --- Lobby Flow ---
@@ -407,15 +363,15 @@
             camBtn.querySelector('i').className = camOn ? 'ph ph-camera' : 'ph ph-camera-slash';
         };
 
-        document.getElementById('lobby-join-now-btn').onclick = () => {
+        document.getElementById('lobby-join-now-btn').onclick = async () => {
             mockState.currentUser.name = document.getElementById('lobby-name-input').value; // Update name
             saveStateToStorage();
-            startRoom(roomId);
+            await startRoom(roomId);
         };
     }
 
     // --- Main Room Flow ---
-    function startRoom(roomId) {
+    async function startRoom(roomId) {
         currentRoomId = roomId;
         renderView(templates.room);
 
@@ -424,7 +380,6 @@
 
         // Add user to room state if not already there (compare by id)
         if (!mockState.rooms[roomId].participants.some(p => p.id === mockState.currentUser.id)) {
-            // push a shallow copy so storage changes are clear
             mockState.rooms[roomId].participants.push({ id: mockState.currentUser.id, name: mockState.currentUser.name, email: mockState.currentUser.email });
         }
 
@@ -444,14 +399,27 @@
         bindRoomControls();
         startTimer();
         setupWhiteboard();
+
+        // Join WebRTC signaling (Firestore) to exchange offers/answers and ICE
+        try {
+            await joinRoomWithWebRTC(roomId);
+        } catch (e) {
+            console.error('WebRTC join failed', e);
+            showToast('Realtime connection failed. Check console and Firebase config.', 'error');
+        }
     }
 
-    function stopRoom() {
+    async function stopRoom() {
+        // Leave WebRTC room first
+        try { await leaveRoomWithWebRTC(currentRoomId); } catch (e) { console.warn('leaveRoomWithWebRTC error', e); }
+
         if (localStream) localStream.getTracks().forEach(track => track.stop());
+
         if (mockState.rooms[currentRoomId] && mockState.currentUser) {
             mockState.rooms[currentRoomId].participants = mockState.rooms[currentRoomId].participants.filter(p => p.id !== mockState.currentUser.id);
             saveStateToStorage();
         }
+
         localStream = null;
         currentRoomId = null;
         stopTimer();
@@ -468,15 +436,11 @@
         document.getElementById('participant-count').textContent = participants.length;
 
         // ensure participantStates exist for each
-        participants.forEach(p => {
-            const key = String(p.id);
-            if (!participantStates[key]) participantStates[key] = { micOn: true, camOn: true, handRaised: false };
-        });
+        participants.forEach(p => { const key = String(p.id); if (!participantStates[key]) participantStates[key] = { micOn: true, camOn: true, handRaised: false }; });
 
         // Speaker view: choose first (simple)
         const speakerParticipant = participants[0];
 
-        // Create DOM elements safely (avoid innerHTML that kills <video>)
         participants.forEach(p => {
             const isLocal = (p.id === mockState.currentUser.id);
             const state = participantStates[String(p.id)] || { micOn: true, camOn: true, handRaised: false };
@@ -488,39 +452,30 @@
 
             if (isLocal && localStream) {
                 const video = document.createElement('video');
-                video.autoplay = true;
-                video.muted = true;
-                video.playsInline = true;
+                video.autoplay = true; video.muted = true; video.playsInline = true;
                 try { video.srcObject = localStream; } catch (e) { console.warn('Could not set srcObject', e); }
                 videoContainer.appendChild(video);
             } else {
                 const img = document.createElement('img');
-                // safe placeholder image
                 img.src = `https://placehold.co/400x250/2c2c2e/ffffff?text=${encodeURIComponent(p.name)}`;
                 img.alt = p.name;
                 videoContainer.appendChild(img);
             }
 
-            // name tag added via DOM (avoids innerHTML rewrite)
             const nameTag = document.createElement('div');
             nameTag.className = 'name-tag';
             nameTag.textContent = `${p.name}${isLocal ? ' (You)' : ''}`;
             videoContainer.appendChild(nameTag);
 
             if (videoGrid.classList.contains('speaker-view') && p !== speakerParticipant) {
-                // ensure we have a speaker rail
                 let rail = document.getElementById('speaker-rail');
-                if (!rail) {
-                    rail = document.createElement('div');
-                    rail.id = 'speaker-rail';
-                }
+                if (!rail) { rail = document.createElement('div'); rail.id = 'speaker-rail'; }
                 rail.appendChild(videoContainer);
                 if (!document.getElementById('speaker-rail')) videoGrid.appendChild(rail);
             } else {
                 videoGrid.appendChild(videoContainer);
             }
 
-            // Participant list item creation
             const li = document.createElement('li');
             li.className = 'flex items-center justify-between';
             li.innerHTML = `
@@ -532,11 +487,8 @@
             participantsList.appendChild(li);
         });
 
-        // if speaker-view and we created a rail earlier, ensure it's present
         const existingRail = document.getElementById('speaker-rail');
-        if (videoGrid.classList.contains('speaker-view') && existingRail && !videoGrid.contains(existingRail)) {
-            videoGrid.appendChild(existingRail);
-        }
+        if (videoGrid.classList.contains('speaker-view') && existingRail && !videoGrid.contains(existingRail)) { videoGrid.appendChild(existingRail); }
     }
 
     function renderFiles() {
@@ -546,17 +498,9 @@
         const files = mockState.rooms[currentRoomId].files || [];
         filesList.innerHTML = '';
         if (files.length === 0) { noFilesMsg.classList.remove('hidden'); }
-        else {
-            noFilesMsg.classList.add('hidden');
-            files.forEach(file => {
-                const li = document.createElement('li');
-                li.className = 'flex items-center justify-between bg-gray-700 p-2 rounded-lg';
-                li.innerHTML = `
+        else { noFilesMsg.classList.add('hidden'); files.forEach(file => { const li = document.createElement('li'); li.className = 'flex items-center justify-between bg-gray-700 p-2 rounded-lg'; li.innerHTML = `
                     <div class="flex items-center gap-2"><i class="ph ph-file-text text-xl"></i><span class="text-sm font-medium">${file.name}</span></div>
-                    <a href="#" class="text-indigo-400 hover:underline text-sm">Download</a>`;
-                filesList.appendChild(li);
-            });
-        }
+                    <a href="#" class="text-indigo-400 hover:underline text-sm">Download</a>`; filesList.appendChild(li); }); }
     }
 
     function bindRoomControls() {
@@ -564,122 +508,162 @@
         document.getElementById('mic-btn').onclick = toggleMic;
         document.getElementById('cam-btn').onclick = toggleCam;
         document.getElementById('settings-btn').onclick = showSettingsModal;
-        document.getElementById('file-share-btn').onclick = () => {
-            const fileName = `Study_Notes_${Math.floor(Math.random() * 100)}.pdf`;
-            mockState.rooms[currentRoomId].files.push({ name: fileName });
-            saveStateToStorage();
-            renderFiles();
-            showToast(`${fileName} shared.`);
-        };
+        document.getElementById('file-share-btn').onclick = () => { const fileName = `Study_Notes_${Math.floor(Math.random() * 100)}.pdf`; mockState.rooms[currentRoomId].files.push({ name: fileName }); saveStateToStorage(); renderFiles(); showToast(`${fileName} shared.`); };
         document.getElementById('raise-hand-btn').onclick = toggleHand;
         document.getElementById('copy-link-btn').onclick = copyInviteLink;
         document.getElementById('qr-code-btn').onclick = showInviteQR;
         document.getElementById('layout-toggle-btn').onclick = toggleLayout;
 
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.onclick = (e) => {
-                const tab = e.currentTarget.dataset.tab;
-                document.querySelectorAll('.tab-btn').forEach(b => {
-                    b.classList.remove('text-indigo-400', 'border-indigo-400');
-                    b.classList.add('text-gray-400');
-                });
-                e.currentTarget.classList.add('text-indigo-400', 'border-indigo-400');
-                ['chat', 'participants', 'files'].forEach(t => {
-                    document.getElementById(`${t}-tab`).classList.toggle('hidden', t !== tab);
-                });
-            };
-        });
+        document.querySelectorAll('.tab-btn').forEach(btn => { btn.onclick = (e) => { const tab = e.currentTarget.dataset.tab; document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('text-indigo-400', 'border-indigo-400'); b.classList.add('text-gray-400'); }); e.currentTarget.classList.add('text-indigo-400', 'border-indigo-400'); ['chat', 'participants', 'files'].forEach(t => { document.getElementById(`${t}-tab`).classList.toggle('hidden', t !== tab); }); }; });
     }
 
-    function toggleMic() {
-        const key = String(mockState.currentUser.id);
-        participantStates[key] = participantStates[key] || { micOn: true, camOn: true, handRaised: false };
-        participantStates[key].micOn = !participantStates[key].micOn;
-        if (localStream && localStream.getAudioTracks().length) localStream.getAudioTracks()[0].enabled = participantStates[key].micOn;
-        document.getElementById('mic-btn').classList.toggle('active', participantStates[key].micOn);
-        const icon = participantStates[key].micOn ? 'ph ph-microphone' : 'ph ph-microphone-slash';
-        document.getElementById('mic-btn').querySelector('i').className = icon;
-        renderParticipants();
-    }
+    function toggleMic() { const key = String(mockState.currentUser.id); participantStates[key] = participantStates[key] || { micOn: true, camOn: true, handRaised: false }; participantStates[key].micOn = !participantStates[key].micOn; if (localStream && localStream.getAudioTracks().length) localStream.getAudioTracks()[0].enabled = participantStates[key].micOn; document.getElementById('mic-btn').classList.toggle('active', participantStates[key].micOn); const icon = participantStates[key].micOn ? 'ph ph-microphone' : 'ph ph-microphone-slash'; document.getElementById('mic-btn').querySelector('i').className = icon; renderParticipants(); }
 
-    function toggleCam() {
-        const key = String(mockState.currentUser.id);
-        participantStates[key] = participantStates[key] || { micOn: true, camOn: true, handRaised: false };
-        participantStates[key].camOn = !participantStates[key].camOn;
-        if (localStream && localStream.getVideoTracks().length) localStream.getVideoTracks()[0].enabled = participantStates[key].camOn;
-        document.getElementById('cam-btn').classList.toggle('active', participantStates[key].camOn);
-        const icon = participantStates[key].camOn ? 'ph ph-camera' : 'ph ph-camera-slash';
-        document.getElementById('cam-btn').querySelector('i').className = icon;
-    }
+    function toggleCam() { const key = String(mockState.currentUser.id); participantStates[key] = participantStates[key] || { micOn: true, camOn: true, handRaised: false }; participantStates[key].camOn = !participantStates[key].camOn; if (localStream && localStream.getVideoTracks().length) localStream.getVideoTracks()[0].enabled = participantStates[key].camOn; document.getElementById('cam-btn').classList.toggle('active', participantStates[key].camOn); const icon = participantStates[key].camOn ? 'ph ph-camera' : 'ph ph-camera-slash'; document.getElementById('cam-btn').querySelector('i').className = icon; }
 
-    function toggleHand() {
-        const key = String(mockState.currentUser.id);
-        participantStates[key] = participantStates[key] || { micOn: true, camOn: true, handRaised: false };
-        participantStates[key].handRaised = !participantStates[key].handRaised;
-        document.getElementById('raise-hand-btn').classList.toggle('active', participantStates[key].handRaised);
-        renderParticipants();
-    }
+    function toggleHand() { const key = String(mockState.currentUser.id); participantStates[key] = participantStates[key] || { micOn: true, camOn: true, handRaised: false }; participantStates[key].handRaised = !participantStates[key].handRaised; document.getElementById('raise-hand-btn').classList.toggle('active', participantStates[key].handRaised); renderParticipants(); }
 
-    function toggleLayout() {
-        const grid = document.getElementById('video-grid');
-        const icon = document.getElementById('layout-toggle-btn').querySelector('i');
-        grid.classList.toggle('speaker-view');
-        if (grid.classList.contains('speaker-view')) icon.className = 'ph ph-speaker-high text-xl';
-        else icon.className = 'ph ph-grid-four text-xl';
-        renderParticipants();
-    }
+    function toggleLayout() { const grid = document.getElementById('video-grid'); const icon = document.getElementById('layout-toggle-btn').querySelector('i'); grid.classList.toggle('speaker-view'); if (grid.classList.contains('speaker-view')) icon.className = 'ph ph-speaker-high text-xl'; else icon.className = 'ph ph-grid-four text-xl'; renderParticipants(); }
 
-    function copyInviteLink() {
-        const link = `https://studiconnect.app/join?room=${currentRoomId}`;
-        navigator.clipboard.writeText(link).then(() => showToast('Invite link copied to clipboard!'), () => showToast('Failed to copy link.', 'error'));
-    }
+    function copyInviteLink() { const link = `https://studiconnect.app/join?room=${currentRoomId}`; navigator.clipboard.writeText(link).then(() => showToast('Invite link copied to clipboard!'), () => showToast('Failed to copy link.', 'error')); }
 
-    function showInviteQR() {
-        const link = `https://studiconnect.app/join?room=${currentRoomId}`;
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}`;
-        createModal('qr-modal', 'Scan to Join Room', `<div class="flex justify-center"><img src="${qrUrl}" alt="Room QR Code"></div>`, '');
-    }
+    function showInviteQR() { const link = `https://studiconnect.app/join?room=${currentRoomId}`; const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}`; createModal('qr-modal', 'Scan to Join Room', `<div class="flex justify-center"><img src="${qrUrl}" alt="Room QR Code"></div>`, ''); }
 
-    function showSettingsModal() {
-        const modal = createModal('settings-modal', 'Camera & Video Settings',
-            `<div class="space-y-4">
-                ${['Mirror My Camera', 'Auto Brightness', 'Face Enhancement', 'Background Blur'].map(label => `
-                <div class="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
-                    <label class="font-medium">${label}</label>
-                    <label class="settings-toggle"><input type="checkbox"><span class="slider"></span></label>
-                </div>`).join('')}
-             </div>`, ''
-        );
-    }
+    function showSettingsModal() { const modal = createModal('settings-modal', 'Camera & Video Settings', `<div class="space-y-4"> ${['Mirror My Camera', 'Auto Brightness', 'Face Enhancement', 'Background Blur'].map(label => ` <div class="flex items-center justify-between p-3 bg-gray-700 rounded-lg"> <label class="font-medium">${label}</label> <label class="settings-toggle"><input type="checkbox"><span class="slider"></span></label> </div>`).join('')} </div>`, ''); }
 
-    // Timer
-    function startTimer() {
-        let seconds = 0;
-        const timerEl = document.getElementById('time-tracker');
-        if (!timerEl) return;
-        timerEl.textContent = "00:00:00";
-        timerInterval = setInterval(() => {
-            seconds++;
-            const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
-            const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
-            const s = String(seconds % 60).padStart(2, '0');
-            timerEl.textContent = `${h}:${m}:${s}`;
-        }, 1000);
-    }
+    // --- Timer ---
+    function startTimer() { let seconds = 0; const timerEl = document.getElementById('time-tracker'); if (!timerEl) return; timerEl.textContent = "00:00:00"; timerInterval = setInterval(() => { seconds++; const h = String(Math.floor(seconds / 3600)).padStart(2, '0'); const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0'); const s = String(seconds % 60).padStart(2, '0'); timerEl.textContent = `${h}:${m}:${s}`; }, 1000); }
     function stopTimer() { clearInterval(timerInterval); }
 
-    // Whiteboard (simple visibility toggle)
-    function setupWhiteboard() {
-        const whiteboardContainer = document.getElementById('whiteboard-container');
-        if (!whiteboardContainer) return;
-        const videoGridContainer = document.getElementById('video-grid-container');
-        const whiteboardBtn = document.getElementById('whiteboard-btn');
-        whiteboardBtn.onclick = () => {
-            const isWhiteboardOn = !whiteboardContainer.classList.contains('hidden');
-            whiteboardContainer.classList.toggle('hidden', isWhiteboardOn);
-            videoGridContainer.classList.toggle('hidden', !isWhiteboardOn);
-            whiteboardBtn.classList.toggle('active', !isWhiteboardOn);
-        };
+    // --- Whiteboard ---
+    function setupWhiteboard() { const whiteboardContainer = document.getElementById('whiteboard-container'); if (!whiteboardContainer) return; const videoGridContainer = document.getElementById('video-grid-container'); const whiteboardBtn = document.getElementById('whiteboard-btn'); whiteboardBtn.onclick = () => { const isWhiteboardOn = !whiteboardContainer.classList.contains('hidden'); whiteboardContainer.classList.toggle('hidden', isWhiteboardOn); videoGridContainer.classList.toggle('hidden', !isWhiteboardOn); whiteboardBtn.classList.toggle('active', !isWhiteboardOn); }; }
+
+    // #################################################################
+    // #####               FIREBASE + WEBRTC SIGNALING              #####
+    // #################################################################
+
+    // ====== CONFIG: replace with your Firebase project config ======
+    const firebaseConfig = {
+      apiKey: "PUT_API_KEY",
+      authDomain: "PROJECT.firebaseapp.com",
+      projectId: "PROJECT",
+      storageBucket: "PROJECT.appspot.com",
+      messagingSenderId: "XXX",
+      appId: "XXX"
+    };
+
+    // initialize firebase
+    try {
+      firebase.initializeApp(firebaseConfig);
+    } catch (e) { console.warn('Firebase init warning', e); }
+    const firestore = firebase.firestore();
+
+    // STUN/TURN config - add TURN servers for production
+    const rtcConfig = { iceServers: [ { urls: 'stun:stun.l.google.com:19302' } ] };
+
+    // signaling state
+    const localPeerId = String(Math.random()).slice(2, 11);
+    const peerConnections = {}; // remoteId -> RTCPeerConnection
+    const remoteStreams = {}; // remoteId -> MediaStream
+    let currentRoomIdFirebase = null;
+    let signalsUnsubscribe = null;
+
+    function createRemoteVideoElement(peerId, displayName = 'Remote') {
+      const videoGrid = document.getElementById('video-grid');
+      const wrapper = document.createElement('div');
+      wrapper.className = 'video-participant';
+      wrapper.id = `remote-${peerId}`;
+      const video = document.createElement('video');
+      video.autoplay = true; video.playsInline = true; video.id = `video-${peerId}`;
+      wrapper.appendChild(video);
+      const tag = document.createElement('div'); tag.className = 'name-tag'; tag.textContent = displayName; wrapper.appendChild(tag);
+      videoGrid.appendChild(wrapper);
+      return video;
+    }
+
+    async function ensureLocalStreamForWebRTC() { if (localStream) return localStream; try { localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); return localStream; } catch (e) { console.error('getUserMedia failed (webrtc)', e); throw e; } }
+
+    async function sendSignal(roomId, payload) {
+      const signalsRef = firestore.collection('rooms').doc(roomId).collection('signals');
+      await signalsRef.add({ ...payload, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    }
+
+    async function joinRoomWithWebRTC(roomId) {
+      currentRoomIdFirebase = roomId;
+      await ensureLocalStreamForWebRTC();
+
+      const participantsRef = firestore.collection('rooms').doc(roomId).collection('participants');
+      await participantsRef.doc(localPeerId).set({ id: localPeerId, name: (mockState.currentUser && mockState.currentUser.name) || 'Guest', joinedAt: firebase.firestore.FieldValue.serverTimestamp() });
+
+      participantsRef.onSnapshot(snapshot => {
+        snapshot.docChanges().forEach(async change => {
+          const doc = change.doc; const remoteId = doc.id; if (remoteId === localPeerId) return;
+          if (change.type === 'added') { if (!peerConnections[remoteId]) { createPeerConnectionAndOffer(roomId, remoteId).catch(e => console.error(e)); } }
+          else if (change.type === 'removed') { removePeer(remoteId); }
+        });
+      });
+
+      const signalsRef = firestore.collection('rooms').doc(roomId).collection('signals').orderBy('createdAt');
+      signalsUnsubscribe = signalsRef.onSnapshot(async snap => {
+        for (const change of snap.docChanges()) {
+          if (change.type !== 'added') continue;
+          const msg = change.doc.data(); if (msg.from === localPeerId) continue;
+          if (msg.to && msg.to !== localPeerId && msg.to !== 'all') continue;
+          if (msg.type === 'offer') { await handleIncomingOffer(roomId, msg.from, msg.sdp); }
+          else if (msg.type === 'answer') { await handleIncomingAnswer(msg.from, msg.sdp); }
+          else if (msg.type === 'ice' && msg.candidate) { const pc = peerConnections[msg.from]; if (pc) { try { await pc.addIceCandidate(new RTCIceCandidate(msg.candidate)); } catch (e) { console.warn('Error adding remote ICE', e); } } }
+        }
+      });
+
+      // create offers to existing participants
+      const existing = await participantsRef.get(); existing.forEach(doc => { const pid = doc.id; if (pid !== localPeerId && !peerConnections[pid]) { createPeerConnectionAndOffer(roomId, pid).catch(err => console.error(err)); } });
+    }
+
+    async function createPeerConnectionAndOffer(roomId, remotePeerId) {
+      if (peerConnections[remotePeerId]) return;
+      const pc = new RTCPeerConnection(rtcConfig);
+      peerConnections[remotePeerId] = pc;
+      if (localStream) localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+      pc.onicecandidate = (evt) => { if (evt.candidate) { sendSignal(roomId, { from: localPeerId, to: remotePeerId, type: 'ice', candidate: evt.candidate.toJSON() }); } };
+
+      pc.ontrack = (evt) => {
+        if (!remoteStreams[remotePeerId]) remoteStreams[remotePeerId] = new MediaStream();
+        evt.streams[0].getTracks().forEach(t => remoteStreams[remotePeerId].addTrack(t));
+        const videoEl = document.getElementById(`video-${remotePeerId}`) || createRemoteVideoElement(remotePeerId);
+        try { videoEl.srcObject = remoteStreams[remotePeerId]; } catch (_) { videoEl.src = URL.createObjectURL(remoteStreams[remotePeerId]); }
+      };
+
+      const dc = pc.createDataChannel('chat');
+      dc.onopen = () => console.log('DC open to', remotePeerId);
+      dc.onmessage = (m) => console.log('dc msg', m.data);
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await sendSignal(roomId, { from: localPeerId, to: remotePeerId, type: 'offer', sdp: offer.sdp });
+    }
+
+    async function handleIncomingOffer(roomId, fromId, sdp) {
+      if (!peerConnections[fromId]) {
+        const pc = new RTCPeerConnection(rtcConfig); peerConnections[fromId] = pc;
+        if (localStream) localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        pc.onicecandidate = (evt) => { if (evt.candidate) sendSignal(roomId, { from: localPeerId, to: fromId, type: 'ice', candidate: evt.candidate.toJSON() }); };
+        pc.ontrack = (evt) => { if (!remoteStreams[fromId]) remoteStreams[fromId] = new MediaStream(); evt.streams[0].getTracks().forEach(t => remoteStreams[fromId].addTrack(t)); const videoEl = document.getElementById(`video-${fromId}`) || createRemoteVideoElement(fromId); try { videoEl.srcObject = remoteStreams[fromId]; } catch (_) { videoEl.src = URL.createObjectURL(remoteStreams[fromId]); } };
+        pc.ondatachannel = (ev) => { ev.channel.onmessage = (m) => console.log('dc from remote', m.data); };
+      }
+      const pc = peerConnections[fromId]; await pc.setRemoteDescription({ type: 'offer', sdp }); const answer = await pc.createAnswer(); await pc.setLocalDescription(answer); await sendSignal(roomId, { from: localPeerId, to: fromId, type: 'answer', sdp: answer.sdp });
+    }
+
+    async function handleIncomingAnswer(fromId, sdp) { const pc = peerConnections[fromId]; if (!pc) { console.warn('Got answer for unknown pc', fromId); return; } await pc.setRemoteDescription({ type: 'answer', sdp }); }
+
+    function removePeer(peerId) { if (peerConnections[peerId]) { peerConnections[peerId].close(); delete peerConnections[peerId]; } if (remoteStreams[peerId]) { delete remoteStreams[peerId]; } const el = document.getElementById(`remote-${peerId}`); if (el) el.remove(); }
+
+    async function leaveRoomWithWebRTC(roomId) {
+      if (!roomId) return;
+      try { await firestore.collection('rooms').doc(roomId).collection('participants').doc(localPeerId).delete(); } catch (e) { console.warn('could not remove participant doc', e); }
+      if (signalsUnsubscribe) signalsUnsubscribe(); signalsUnsubscribe = null;
+      Object.keys(peerConnections).forEach(pid => { try { peerConnections[pid].close(); } catch (e) {} removePeer(pid); });
+      currentRoomIdFirebase = null;
     }
 
     // #################################################################
@@ -687,8 +671,7 @@
     // #################################################################
     loadStateFromStorage();
     initAuth();
-
-    }); // DOMContentLoaded
+    });
     </script>
 </body>
 </html>
