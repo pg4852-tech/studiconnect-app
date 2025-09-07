@@ -32,7 +32,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
 
 - **Frontend:** HTML5, CSS3 (Tailwind CSS), JavaScript
 - **Real-Time Communication (Target):** WebRTC for peer-to-peer video/audio, and WebSockets for signaling and chat.
-- **Backend (Target):** Java (Spring Boot), REST APIs
+- **Backend (Target)::** Java (Spring Boot), REST APIs
 - **Database (Target):** PostgreSQL or MySQL
 
 ## 🚀 How to Run
@@ -98,29 +98,50 @@ While this is a frontend-only prototype, it is built with a specific backend arc
     // #################################################################
     // #####              SIMULATED GLOBAL STATE                   #####
     // #################################################################
-    // In a real app, this data would be managed on a secure backend server
-    // connected to a database. The state is pre-populated here to make the
-    // multi-user simulation functional across different browser sessions.
-    const mockState = {
-        users: [{ id: 1, name: 'Student', email: 'student@example.com', password: 'password123' }],
-        rooms: {
-            'DEMO123': {
-                password: null,
-                participants: [],
-                files: [
-                    { name: 'Syllabus.pdf' },
-                    { name: 'Chapter1_Notes.docx' }
-                ]
-            },
-            'SECRET': {
-                password: 'study',
-                participants: [],
-                files: []
+    // To simulate a shared backend, we use localStorage. This allows multiple
+    // browser tabs on the same computer to share the same state, making the
+    // multi-user experience feel real. In a production app, this would be
+    // replaced with a real database and WebSocket server.
+    const STORAGE_KEY = 'studiConnectState';
+    
+    let mockState;
+
+    function loadStateFromStorage() {
+        const storedState = localStorage.getItem(STORAGE_KEY);
+        if (storedState) {
+            mockState = JSON.parse(storedState);
+        } else {
+            // Initialize with default state if nothing is in storage
+            mockState = {
+                users: [{ id: 1, name: 'Student', email: 'student@example.com', password: 'password123' }],
+                rooms: {
+                    'DEMO123': {
+                        password: null, participants: [],
+                        files: [{ name: 'Syllabus.pdf' }, { name: 'Chapter1_Notes.docx' }]
+                    },
+                    'SECRET': { password: 'study', participants: [], files: [] }
+                },
+                currentUser: null,
+                nextUserId: 2
+            };
+            saveStateToStorage();
+        }
+    }
+    
+    function saveStateToStorage() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(mockState));
+    }
+
+    // Listen for changes from other tabs
+    window.addEventListener('storage', (event) => {
+        if (event.key === STORAGE_KEY) {
+            mockState = JSON.parse(event.newValue);
+            // If currently in a room, re-render participants to reflect changes
+            if (currentRoomId && mockState.rooms[currentRoomId]) {
+                renderParticipants();
             }
-        },
-        currentUser: null,
-        nextUserId: 2
-    };
+        }
+    });
 
     // #################################################################
     // #####              UI TEMPLATES & COMPONENTS                #####
@@ -134,14 +155,8 @@ While this is a frontend-only prototype, it is built with a specific backend arc
         dashboard: `...`,
         lobby: `...`,
         room: `...`,
-        settingsModal: `...`,
-        passwordModal: `...`,
-        createRoomModal: `...`
     };
-    
-    // (Full template strings will be populated in the final implementation)
 
-    // Redefining templates within the script for clarity
     templates.login = `
         <div id="auth-view" class="flex-grow flex items-center justify-center p-4">
             <div class="w-full max-w-md bg-gray-800 p-8 rounded-2xl shadow-lg border border-gray-700">
@@ -244,10 +259,6 @@ While this is a frontend-only prototype, it is built with a specific backend arc
             </div></div>
         </main>`;
 
-    templates.settingsModal = `...`; // Implemented as a function
-    templates.passwordModal = `...`;
-    templates.createRoomModal = `...`;
-
     // #################################################################
     // #####                  UI RENDERING & LOGIC                 #####
     // #################################################################
@@ -313,6 +324,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
         const errorEl = document.getElementById('login-error');
         if (user) {
             mockState.currentUser = user;
+            saveStateToStorage();
             initDashboard();
         } else {
             errorEl.textContent = 'Invalid email or password.';
@@ -331,6 +343,8 @@ While this is a frontend-only prototype, it is built with a specific backend arc
             errorEl.classList.remove('hidden');
         } else {
             mockState.users.push({ id: mockState.nextUserId++, name, email, password });
+            mockState.nextUserId++;
+            saveStateToStorage();
             showToast('Account created! Please log in.');
             initAuth();
         }
@@ -342,6 +356,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
         document.getElementById('user-name-display').textContent = mockState.currentUser.name;
         document.getElementById('logout-btn').onclick = () => {
             mockState.currentUser = null;
+            saveStateToStorage();
             initAuth();
         };
         document.getElementById('create-room-btn').onclick = showCreateRoomModal;
@@ -359,6 +374,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
             const password = modal.querySelector('#room-password-input').value;
             const newRoomId = Math.random().toString(36).substr(2, 6).toUpperCase();
             mockState.rooms[newRoomId] = { password: password || null, participants: [], files: [] };
+            saveStateToStorage();
             modal.remove();
             initLobby(newRoomId);
         };
@@ -441,17 +457,19 @@ While this is a frontend-only prototype, it is built with a specific backend arc
         currentRoomId = roomId;
         renderView(templates.room);
         
-        // Add user to room state
-        mockState.rooms[roomId].participants.push(mockState.currentUser);
-
-        // Add mock participants if room is new
-        if (mockState.rooms[roomId].participants.length === 1) {
-            ['Alex', 'Maria', 'Chen'].forEach(name => {
-                const mockId = `sim_${name.toLowerCase()}`;
-                mockState.rooms[roomId].participants.push({ id: mockId, name });
-                participantStates[mockId] = { micOn: Math.random() > 0.3, camOn: true, handRaised: false };
-            });
+        // Add user to room state if not already there
+        if (!mockState.rooms[roomId].participants.some(p => p.id === mockState.currentUser.id)) {
+            mockState.rooms[roomId].participants.push(mockState.currentUser);
         }
+
+        // Add ADMIN bot if it's the first real user joining
+        if (mockState.rooms[roomId].participants.filter(p => !p.id.startsWith('sim_')).length === 1 && !mockState.rooms[roomId].participants.some(p => p.id === 'sim_admin')) {
+            const adminId = 'sim_admin';
+            mockState.rooms[roomId].participants.push({ id: adminId, name: 'ADMIN' });
+            participantStates[adminId] = { micOn: true, camOn: true, handRaised: false };
+        }
+        
+        saveStateToStorage();
         
         document.getElementById('room-id-display').textContent = roomId;
         
@@ -467,6 +485,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
         
         if (mockState.rooms[currentRoomId] && mockState.currentUser) {
             mockState.rooms[currentRoomId].participants = mockState.rooms[currentRoomId].participants.filter(p => p.id !== mockState.currentUser.id);
+            saveStateToStorage();
         }
 
         localStream = null;
@@ -476,7 +495,8 @@ While this is a frontend-only prototype, it is built with a specific backend arc
     }
     
     function renderParticipants() {
-        if (!currentRoomId) return;
+        if (!currentRoomId || !mockState.rooms[currentRoomId]) return;
+
         const videoGrid = document.getElementById('video-grid');
         const participantsList = document.getElementById('participants-list');
         const participants = mockState.rooms[currentRoomId].participants;
@@ -501,7 +521,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
             
             if (p === speakerParticipant) videoContainer.classList.add('speaker');
 
-            if (isLocal) {
+            if (isLocal && localStream) {
                 const video = document.createElement('video');
                 video.autoplay = true;
                 video.muted = true;
@@ -538,6 +558,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
     }
     
     function renderFiles() {
+        if (!currentRoomId || !mockState.rooms[currentRoomId]) return;
         const filesList = document.getElementById('files-list');
         const noFilesMsg = document.getElementById('no-files-msg');
         const files = mockState.rooms[currentRoomId].files;
@@ -566,6 +587,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
         document.getElementById('file-share-btn').onclick = () => {
             const fileName = `Study_Notes_${Math.floor(Math.random() * 100)}.pdf`;
             mockState.rooms[currentRoomId].files.push({ name: fileName });
+            saveStateToStorage();
             renderFiles();
             showToast(`${fileName} shared.`);
         };
@@ -598,7 +620,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
         if (localStream) localStream.getAudioTracks()[0].enabled = state.micOn;
         document.getElementById('mic-btn').classList.toggle('active', state.micOn);
         document.getElementById('mic-btn').querySelector('i').className = state.micOn ? 'ph ph-microphone' : 'ph ph-microphone-slash';
-        renderParticipants(); // Re-render to update list icon
+        renderParticipants();
     }
     
     function toggleCam() {
@@ -659,6 +681,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
     function startTimer() {
         let seconds = 0;
         const timerEl = document.getElementById('time-tracker');
+        if (!timerEl) return;
         timerEl.textContent = "00:00:00";
         timerInterval = setInterval(() => {
             seconds++;
@@ -672,8 +695,9 @@ While this is a frontend-only prototype, it is built with a specific backend arc
 
     // --- Whiteboard ---
     function setupWhiteboard() {
-        // Logic for whiteboard remains the same
         const whiteboardContainer = document.getElementById('whiteboard-container');
+        if (!whiteboardContainer) return;
+        
         const videoGridContainer = document.getElementById('video-grid-container');
         const whiteboardBtn = document.getElementById('whiteboard-btn');
         whiteboardBtn.onclick = () => {
@@ -687,6 +711,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
     // #################################################################
     // #####                 INITIALIZATION                        #####
     // #################################################################
+    loadStateFromStorage();
     initAuth();
 });
     </script>
