@@ -98,10 +98,26 @@ While this is a frontend-only prototype, it is built with a specific backend arc
     // #################################################################
     // #####              SIMULATED GLOBAL STATE                   #####
     // #################################################################
-    // In a real app, this data would be managed on a secure backend server.
+    // In a real app, this data would be managed on a secure backend server
+    // connected to a database. The state is pre-populated here to make the
+    // multi-user simulation functional across different browser sessions.
     const mockState = {
         users: [{ id: 1, name: 'Student', email: 'student@example.com', password: 'password123' }],
-        rooms: {}, // { roomId: { password: 'xyz', participants: [], files: [] } }
+        rooms: {
+            'DEMO123': {
+                password: null,
+                participants: [],
+                files: [
+                    { name: 'Syllabus.pdf' },
+                    { name: 'Chapter1_Notes.docx' }
+                ]
+            },
+            'SECRET': {
+                password: 'study',
+                participants: [],
+                files: []
+            }
+        },
         currentUser: null,
         nextUserId: 2
     };
@@ -172,6 +188,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
                 <div class="bg-gray-700 p-6 rounded-lg mb-6">
                     <h3 class="font-semibold text-lg mb-4">Join a Room</h3>
                     <div class="flex gap-4"><input type="text" id="room-code-input" class="flex-grow px-4 py-2 bg-gray-600 rounded-lg" placeholder="Enter Room Code"><button id="join-room-btn" class="bg-indigo-600 text-white font-semibold px-6 py-2 rounded-lg">Join</button></div>
+                    <p class="text-xs text-gray-400 mt-2">Hint: Try joining public room <code class="bg-gray-600 p-1 rounded">DEMO123</code> or private room <code class="bg-gray-600 p-1 rounded">SECRET</code> (pw: study).</p>
                 </div>
                 <div class="text-center"><p class="text-gray-400 mb-4">OR</p><button id="create-room-btn" class="w-full bg-green-600 text-white font-semibold py-3 rounded-lg">Create a New Study Room</button></div>
             </div>
