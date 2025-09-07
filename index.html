@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudiConnect - Online Group Study</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/phosphor-icons"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .hidden { display: none; }
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .video-participant {
+            aspect-ratio: 16 / 10;
+            overflow: hidden;
+            border-radius: 0.5rem;
+            background-color: #2c2c2e;
+            position: relative;
+        }
+        .video-participant video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .video-participant .name-tag {
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        .control-button {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 60px;
+            height: 60px;
+            border-radius: 0.75rem;
+            background-color: #374151; /* gray-700 */
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .control-button:hover {
+            background-color: #4b5563; /* gray-600 */
+        }
+         .control-button.active {
+            background-color: #4f46e5; /* indigo-600 */
+        }
+        .control-button.danger {
+            background-color: #dc2626; /* red-600 */
+        }
+        .control-button.danger:hover {
+            background-color: #ef4444; /* red-500 */
+        }
+        .control-button i {
+            font-size: 24px;
+        }
+         .control-button span {
+            font-size: 10px;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200">
+
+    <!-- App Container -->
+    <div id="app-container" class="min-h-screen flex flex-col">
+
+        <!-- Login/Signup View -->
+        <div id="auth-view" class="flex-grow flex items-center justify-center p-4">
+            <div class="w-full max-w-md bg-gray-800 p-8 rounded-2xl shadow-lg border border-gray-700">
+                <h2 class="text-3xl font-bold text-center text-white mb-2">StudiConnect</h2>
+                <p class="text-center text-gray-400 mb-8">Your collaborative study space.</p>
+                
+                <!-- Mock Form -->
+                <form id="login-form">
+                    <div class="mb-4">
+                        <label for="email" class="block text-sm font-medium text-gray-300 mb-2">Email or Student ID</label>
+                        <input type="email" id="email" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="you@school.edu" required value="student@example.com">
+                    </div>
+                    <div class="mb-6">
+                        <label for="password" class="block text-sm font-medium text-gray-300 mb-2">Password</label>
+                        <input type="password" id="password" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="••••••••" required value="password123">
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-600 text-white font-semibold py-2.5 rounded-lg hover:bg-indigo-700 transition-colors duration-300">Login</button>
+                    <p class="text-center text-sm text-gray-400 mt-6">
+                        Don't have an account? <a href="#" class="font-medium text-indigo-400 hover:underline">Sign up</a>
+                    </p>
+                </form>
+            </div>
+        </div>
+
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="hidden flex-grow flex items-center justify-center p-4">
+            <div class="w-full max-w-lg bg-gray-800 p-8 rounded-2xl shadow-lg border border-gray-700">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-white">Welcome, Student!</h2>
+                    <button id="logout-btn" class="text-sm text-indigo-400 hover:underline">Logout</button>
+                </div>
+                <p class="text-gray-400 mb-8">Create a new study room or join an existing one.</p>
+                
+                <div class="bg-gray-700 p-6 rounded-lg mb-6">
+                    <h3 class="font-semibold text-lg mb-4">Join a Room</h3>
+                    <div class="flex gap-4">
+                        <input type="text" id="room-code-input" class="flex-grow px-4 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter Room Code">
+                        <button id="join-room-btn" class="bg-indigo-600 text-white font-semibold px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors">Join</button>
+                    </div>
+                </div>
+
+                <div class="text-center">
+                    <p class="text-gray-400 mb-4">OR</p>
+                    <button id="create-room-btn" class="w-full bg-green-600 text-white font-semibold py-3 rounded-lg hover:bg-green-700 transition-colors">Create a New Study Room</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Room View -->
+        <main id="room-view" class="hidden flex-grow flex flex-col md:flex-row h-screen">
+            <!-- Main Content: Video Grid & Whiteboard -->
+            <div class="flex-grow flex flex-col p-4 bg-gray-900">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <h1 class="text-xl font-bold">Room: <span id="room-id-display"></span></h1>
+                        <div class="flex items-center text-sm text-gray-400">
+                            <i class="ph-clock mr-1"></i>
+                            <span id="time-tracker">00:00:00</span>
+                        </div>
+                    </div>
+                     <div class="flex items-center space-x-2">
+                        <button id="theme-toggle" class="p-2 rounded-full bg-gray-700 hover:bg-gray-600">
+                            <i id="theme-icon" class="ph ph-sun text-xl"></i>
+                        </button>
+                        <button id="copy-link-btn" class="flex items-center bg-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-600">
+                            <i class="ph-link mr-2"></i>
+                            Copy Invite Link
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Video/Whiteboard Area -->
+                <div id="media-container" class="flex-grow bg-gray-800 rounded-lg p-4 flex items-center justify-center relative">
+                    
+                    <!-- Video Grid -->
+                    <div id="video-grid-container" class="w-full h-full">
+                        <div class="video-grid h-full">
+                            <div class="video-participant border-2 border-indigo-500">
+                                <video id="local-video" autoplay muted></video>
+                                <div class="name-tag">You</div>
+                            </div>
+                             <!-- Simulated participants -->
+                             <div class="video-participant">
+                                <img src="https://placehold.co/400x250/2c2c2e/ffffff?text=Alex" class="w-full h-full object-cover">
+                                <div class="name-tag">Alex</div>
+                            </div>
+                             <div class="video-participant">
+                                <img src="https://placehold.co/400x250/2c2c2e/ffffff?text=Maria" class="w-full h-full object-cover">
+                                <div class="name-tag">Maria</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Whiteboard -->
+                    <div id="whiteboard-container" class="hidden w-full h-full bg-white rounded-md">
+                        <canvas id="whiteboard-canvas"></canvas>
+                        <div class="absolute top-2 right-2 p-2 flex gap-2">
+                            <input type="color" id="color-picker" value="#000000" class="w-8 h-8 rounded border-none cursor-pointer">
+                            <button id="clear-canvas-btn" class="bg-gray-200 p-2 rounded text-gray-800 hover:bg-gray-300">
+                                <i class="ph ph-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Side Panel: Chat, Participants -->
+            <aside id="side-panel" class="w-full md:w-80 lg:w-96 bg-gray-800 border-l border-gray-700 flex flex-col p-4 transition-all duration-300 h-1/3 md:h-full">
+                <!-- Tabs -->
+                <div class="flex border-b border-gray-600 mb-4">
+                    <button data-tab="chat" class="tab-btn flex-1 py-2 font-semibold text-indigo-400 border-b-2 border-indigo-400">Chat</button>
+                    <button data-tab="participants" class="tab-btn flex-1 py-2 font-semibold text-gray-400">Participants</button>
+                </div>
+
+                <!-- Chat Content -->
+                <div id="chat-tab" class="flex-grow flex flex-col overflow-y-auto">
+                    <div id="chat-messages" class="flex-grow space-y-4 pr-2">
+                        <!-- Messages will be appended here -->
+                        <div class="flex items-start gap-2.5">
+                            <div class="flex flex-col w-full max-w-[320px] leading-1.5 p-3 border-gray-600 bg-gray-700 rounded-e-xl rounded-es-xl">
+                                <div class="flex items-center space-x-2 rtl:space-x-reverse">
+                                    <span class="text-sm font-semibold text-white">Alex</span>
+                                </div>
+                                <p class="text-sm font-normal py-2 text-gray-200">Hey everyone! Ready to review Chapter 5?</p>
+                            </div>
+                        </div>
+                         <div class="flex items-start gap-2.5 flex-row-reverse">
+                            <div class="flex flex-col w-full max-w-[320px] leading-1.5 p-3 border-gray-600 bg-indigo-600 rounded-s-xl rounded-ee-xl">
+                                <div class="flex items-center space-x-2 rtl:space-x-reverse justify-end">
+                                    <span class="text-sm font-semibold text-white">You</span>
+                                </div>
+                                <p class="text-sm font-normal py-2 text-white">Yep, let's do it. I'm a bit stuck on the last section.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-2">
+                        <input type="text" id="chat-input" class="flex-grow bg-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Type a message...">
+                        <button id="send-chat-btn" class="bg-indigo-600 text-white p-2.5 rounded-lg"><i class="ph ph-paper-plane-tilt text-xl"></i></button>
+                    </div>
+                </div>
+
+                <!-- Participants Content -->
+                <div id="participants-tab" class="hidden flex-grow overflow-y-auto">
+                    <ul class="space-y-3">
+                       <li class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <span class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center font-bold text-sm mr-3">Y</span>
+                                <span class="font-medium">You</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <i class="ph ph-microphone text-green-400 text-xl"></i>
+                                <i class="ph ph-camera text-green-400 text-xl"></i>
+                            </div>
+                        </li>
+                        <li class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <span class="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center font-bold text-sm mr-3">A</span>
+                                <span class="font-medium">Alex</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                               <i class="ph ph-microphone-slash text-red-400 text-xl"></i>
+                               <i class="ph ph-camera text-green-400 text-xl"></i>
+                            </div>
+                        </li>
+                         <li class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <span class="w-8 h-8 rounded-full bg-teal-500 flex items-center justify-center font-bold text-sm mr-3">M</span>
+                                <span class="font-medium">Maria</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                               <i class="ph ph-microphone text-green-400 text-xl"></i>
+                               <i class="ph ph-hand text-yellow-400 text-xl animate-pulse"></i>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </aside>
+
+            <!-- Bottom Controls -->
+            <div id="controls-bar" class="absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg p-4 z-10">
+                <div class="bg-gray-800 bg-opacity-80 backdrop-blur-sm p-3 rounded-2xl flex justify-center gap-3">
+                    <button id="mic-btn" class="control-button active" title="Mute/Unmute Mic">
+                        <i class="ph ph-microphone"></i>
+                        <span class="text-[10px]">Mic</span>
+                    </button>
+                    <button id="cam-btn" class="control-button active" title="Start/Stop Camera">
+                        <i class="ph ph-camera"></i>
+                        <span class="text-[10px]">Camera</span>
+                    </button>
+                    <button id="screen-share-btn" class="control-button" title="Share Screen">
+                        <i class="ph ph-desktop"></i>
+                        <span class="text-[10px]">Share</span>
+                    </button>
+                     <button id="whiteboard-btn" class="control-button" title="Toggle Whiteboard">
+                        <i class="ph ph-chalkboard-simple"></i>
+                        <span class="text-[10px]">Board</span>
+                    </button>
+                    <button id="raise-hand-btn" class="control-button" title="Raise Hand">
+                        <i class="ph ph-hand"></i>
+                         <span class="text-[10px]">Hand</span>
+                    </button>
+                    <button id="leave-btn" class="control-button danger" title="Leave Room">
+                        <i class="ph ph-phone-disconnect"></i>
+                        <span class="text-[10px]">Leave</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- View Management ---
+            const authView = document.getElementById('auth-view');
+            const dashboardView = document.getElementById('dashboard-view');
+            const roomView = document.getElementById('room-view');
+            const loginForm = document.getElementById('login-form');
+            const logoutBtn = document.getElementById('logout-btn');
+
+            // --- Dashboard Elements ---
+            const createRoomBtn = document.getElementById('create-room-btn');
+            const joinRoomBtn = document.getElementById('join-room-btn');
+            const roomCodeInput = document.getElementById('room-code-input');
+
+            // --- Room Elements ---
+            const roomIdDisplay = document.getElementById('room-id-display');
+            const localVideo = document.getElementById('local-video');
+            const micBtn = document.getElementById('mic-btn');
+            const camBtn = document.getElementById('cam-btn');
+            const screenShareBtn = document.getElementById('screen-share-btn');
+            const whiteboardBtn = document.getElementById('whiteboard-btn');
+            const raiseHandBtn = document.getElementById('raise-hand-btn');
+            const leaveBtn = document.getElementById('leave-btn');
+            const copyLinkBtn = document.getElementById('copy-link-btn');
+            
+            // --- Side Panel ---
+            const tabButtons = document.querySelectorAll('.tab-btn');
+            const chatTab = document.getElementById('chat-tab');
+            const participantsTab = document.getElementById('participants-tab');
+
+            // --- Whiteboard ---
+            const videoGridContainer = document.getElementById('video-grid-container');
+            const whiteboardContainer = document.getElementById('whiteboard-container');
+            const whiteboardCanvas = document.getElementById('whiteboard-canvas');
+            const colorPicker = document.getElementById('color-picker');
+            const clearCanvasBtn = document.getElementById('clear-canvas-btn');
+            const ctx = whiteboardCanvas.getContext('2d');
+            let isDrawing = false;
+            
+            // --- Timer ---
+            const timeTracker = document.getElementById('time-tracker');
+            let timerInterval;
+            
+            // --- Theme ---
+            const themeToggle = document.getElementById('theme-toggle');
+            const themeIcon = document.getElementById('theme-icon');
+
+            // App state
+            let localStream;
+            let isMicOn = true;
+            let isCamOn = true;
+            let isScreenSharing = false;
+            let isHandRaised = false;
+            let isWhiteboardOn = false;
+
+            // --- MOCK LOGIC (simulating backend) ---
+
+            function showView(view) {
+                authView.classList.add('hidden');
+                dashboardView.classList.add('hidden');
+                roomView.classList.add('hidden');
+                view.classList.remove('hidden');
+            }
+
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                // In a real app, you'd send this to the backend
+                console.log('Logging in...');
+                showView(dashboardView);
+            });
+
+            logoutBtn.addEventListener('click', () => {
+                // In a real app, you'd invalidate the JWT
+                stopRoom();
+                showView(authView);
+            });
+            
+            createRoomBtn.addEventListener('click', () => {
+                const newRoomId = Math.random().toString(36).substr(2, 6).toUpperCase();
+                startRoom(newRoomId);
+            });
+            
+            joinRoomBtn.addEventListener('click', () => {
+                const roomCode = roomCodeInput.value.trim().toUpperCase();
+                if(roomCode) {
+                    startRoom(roomCode);
+                } else {
+                    alert('Please enter a room code.');
+                }
+            });
+
+            async function startRoom(roomId) {
+                roomIdDisplay.innerText = roomId;
+                showView(roomView);
+                
+                try {
+                    // Get camera/mic access
+                    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    localVideo.srcObject = localStream;
+                    console.log('Local stream started.');
+                    
+                    // Here you would establish WebSocket connection for signaling
+                    // And create RTCPeerConnection for each user
+                    console.log(`--- SIMULATION: Connecting to room ${roomId} via WebSocket ---`);
+                    console.log('--- SIMULATION: WebRTC peer connections would be created here ---');
+
+                    startTimer();
+                    setupWhiteboard();
+
+                } catch (error) {
+                    console.error('Error accessing media devices.', error);
+                    alert('Could not access your camera and microphone. Please check permissions.');
+                    showView(dashboardView);
+                }
+            }
+            
+            function stopRoom() {
+                if(localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                    localStream = null;
+                }
+                 // Here you would close WebSocket and RTCPeerConnections
+                console.log('--- SIMULATION: Disconnecting from WebSocket and closing peer connections ---');
+                stopTimer();
+            }
+
+            leaveBtn.addEventListener('click', () => {
+                stopRoom();
+                showView(dashboardView);
+            });
+
+            // --- ROOM CONTROLS ---
+
+            micBtn.addEventListener('click', () => {
+                isMicOn = !isMicOn;
+                localStream.getAudioTracks()[0].enabled = isMicOn;
+                micBtn.classList.toggle('active', isMicOn);
+                micBtn.querySelector('i').className = isMicOn ? 'ph ph-microphone' : 'ph ph-microphone-slash';
+            });
+
+            camBtn.addEventListener('click', () => {
+                isCamOn = !isCamOn;
+                localStream.getVideoTracks()[0].enabled = isCamOn;
+                camBtn.classList.toggle('active', isCamOn);
+                camBtn.querySelector('i').className = isCamOn ? 'ph ph-camera' : 'ph ph-camera-slash';
+            });
+            
+            screenShareBtn.addEventListener('click', async () => {
+                if (!isScreenSharing) {
+                    try {
+                        const screenStream = await navigator.mediaDevices.getDisplayMedia({ cursor: true });
+                        const screenTrack = screenStream.getVideoTracks()[0];
+                        
+                        // In a real app, you'd replace the track in the RTCPeerConnection sender
+                        localVideo.srcObject = screenStream; 
+                        isScreenSharing = true;
+                        
+                        screenShareBtn.classList.add('active');
+                        screenTrack.onended = () => stopScreenShare();
+                        
+                    } catch (error) {
+                        console.error('Error starting screen share', error);
+                    }
+                } else {
+                    stopScreenShare();
+                }
+            });
+
+            function stopScreenShare() {
+                localVideo.srcObject = localStream;
+                isScreenSharing = false;
+                screenShareBtn.classList.remove('active');
+                 // In a real app, you'd replace the track back to the camera track
+            }
+
+            raiseHandBtn.addEventListener('click', () => {
+                isHandRaised = !isHandRaised;
+                raiseHandBtn.classList.toggle('active', isHandRaised);
+                console.log(`--- SIMULATION: Hand is ${isHandRaised ? 'raised' : 'lowered'}. This status would be sent to others. ---`);
+            });
+
+            whiteboardBtn.addEventListener('click', () => {
+                isWhiteboardOn = !isWhiteboardOn;
+                whiteboardBtn.classList.toggle('active', isWhiteboardOn);
+                videoGridContainer.classList.toggle('hidden', isWhiteboardOn);
+                whiteboardContainer.classList.toggle('hidden', !isWhiteboardOn);
+                if(isWhiteboardOn) resizeCanvas();
+            });
+
+            copyLinkBtn.addEventListener('click', () => {
+                // Using a placeholder domain because window.location.href in a sandboxed
+                // environment might be a "blob:" URL, which is not shareable.
+                const link = `https://studiconnect.app/join?room=${roomIdDisplay.innerText}`;
+
+                // Create a temporary textarea element to hold the text
+                const textArea = document.createElement("textarea");
+                textArea.value = link;
+                
+                // Make it invisible and append it to the body
+                textArea.style.position = 'fixed';
+                textArea.style.top = '-9999px';
+                textArea.style.left = '-9999px';
+                document.body.appendChild(textArea);
+                
+                // Select the text and execute the copy command
+                textArea.select();
+                try {
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                        const originalContent = copyLinkBtn.innerHTML;
+                        copyLinkBtn.innerHTML = `<i class="ph ph-check-circle mr-2"></i> Copied!`;
+                        copyLinkBtn.disabled = true;
+                        setTimeout(() => {
+                            copyLinkBtn.innerHTML = originalContent;
+                            copyLinkBtn.disabled = false;
+                        }, 2000);
+                    } else {
+                        // This else block might not be reachable in modern browsers
+                        // but is kept for robustness.
+                        alert('Failed to copy the link.');
+                    }
+                } catch (err) {
+                    console.error('Oops, unable to copy', err);
+                    alert('Failed to copy the link.');
+                }
+                
+                // Remove the temporary textarea
+                document.body.removeChild(textArea);
+            });
+
+            // --- SIDE PANEL TABS ---
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const tab = button.dataset.tab;
+                    
+                    // Update buttons
+                    tabButtons.forEach(btn => {
+                        btn.classList.remove('text-indigo-400', 'border-indigo-400');
+                        btn.classList.add('text-gray-400');
+                    });
+                    button.classList.add('text-indigo-400', 'border-indigo-400');
+                    
+                    // Update content
+                    chatTab.classList.toggle('hidden', tab !== 'chat');
+                    participantsTab.classList.toggle('hidden', tab !== 'participants');
+                });
+            });
+
+            // --- TIMER ---
+            function startTimer() {
+                let seconds = 0;
+                timeTracker.innerText = "00:00:00";
+                timerInterval = setInterval(() => {
+                    seconds++;
+                    const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
+                    const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+                    const s = String(seconds % 60).padStart(2, '0');
+                    timeTracker.innerText = `${h}:${m}:${s}`;
+                }, 1000);
+            }
+
+            function stopTimer() {
+                clearInterval(timerInterval);
+            }
+
+            // --- WHITEBOARD LOGIC ---
+            function setupWhiteboard() {
+                whiteboardCanvas.addEventListener('mousedown', startDrawing);
+                whiteboardCanvas.addEventListener('mouseup', stopDrawing);
+                whiteboardCanvas.addEventListener('mousemove', draw);
+                whiteboardCanvas.addEventListener('mouseout', stopDrawing);
+                clearCanvasBtn.addEventListener('click', clearCanvas);
+                window.addEventListener('resize', resizeCanvas);
+            }
+            
+            function resizeCanvas() {
+                if(isWhiteboardOn) {
+                    whiteboardCanvas.width = whiteboardContainer.clientWidth;
+                    whiteboardCanvas.height = whiteboardContainer.clientHeight;
+                }
+            }
+
+            function startDrawing(e) {
+                isDrawing = true;
+                draw(e);
+            }
+            
+            function stopDrawing() {
+                isDrawing = false;
+                ctx.beginPath();
+            }
+
+            function draw(e) {
+                if (!isDrawing) return;
+                ctx.lineWidth = 5;
+                ctx.lineCap = 'round';
+                ctx.strokeStyle = colorPicker.value;
+
+                const rect = whiteboardCanvas.getBoundingClientRect();
+                ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+
+                 // In a real app, drawing data (coordinates) would be sent via WebSocket
+            }
+            
+            function clearCanvas() {
+                ctx.clearRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
+                // In a real app, a "clear" event would be sent via WebSocket
+            }
+            
+            // --- THEME TOGGLE ---
+            themeToggle.addEventListener('click', () => {
+                document.documentElement.classList.toggle('dark');
+                if (document.documentElement.classList.contains('dark')) {
+                    themeIcon.className = 'ph ph-sun text-xl';
+                } else {
+                    themeIcon.className = 'ph ph-moon text-xl';
+                }
+            });
+
+        });
+    </script>
+</body>
+</html>
+
