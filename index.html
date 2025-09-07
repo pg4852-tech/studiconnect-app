@@ -1,54 +1,9 @@
-<!--
-# StudiConnect - Online Group Study Platform
-
-This repository contains the complete frontend prototype for StudiConnect, a feature-rich online platform designed for collaborative group study. This single-file application demonstrates a modern, responsive user interface and simulates all key functionalities of the final product.
-
-## 🎯 Features Demonstrated
-
-This prototype simulates a complete user journey, from authentication to real-time collaboration within a study room.
-
-### Core Functionality
-- **User Authentication:** Secure sign-up and login flow (simulated).
-- **Room Management:** Create public or password-protected study rooms. Join rooms via a unique code or a shareable link.
-- **Pre-call Lobby:** Preview your camera and set your name/mic/camera status before entering a room.
-- **Dynamic Video Layouts:** Switch between a responsive **Grid View** and a presenter-focused **Speaker View**.
-- **Real-Time Participant Updates:** See who is in the room, who is speaking, who is muted, and who has their hand raised.
-
-### Collaboration Tools
-- **Screen Sharing:** Share your entire screen, a specific window, or a browser tab.
-- **Interactive Whiteboard:** A shared canvas for real-time drawing and brainstorming.
-- **File Sharing:** Upload and view shared study materials within the room.
-- **Live Chat:** Instant messaging with other participants.
-
-### Advanced Features
-- **Camera Settings:** Fine-tune your video with options like mirroring, auto-brightness, and background blur (UI only).
-- **Invite System:** Easily invite others with a one-click "Copy Link" button or a scannable **QR Code**.
-- **Dark & Light Modes:** A sleek, modern UI with theme toggling for user comfort.
-- **Responsive Design:** A fully responsive interface that works seamlessly on desktops, tablets, and mobile devices.
-
-## 🛠️ Technology Stack (Target)
-
-While this is a frontend-only prototype, it is built with a specific backend architecture in mind.
-
-- **Frontend:** HTML5, CSS3 (Tailwind CSS), JavaScript
-- **Real-Time Communication (Target):** WebRTC for peer-to-peer video/audio, and WebSockets for signaling and chat.
-- **Backend (Target)::** Java (Spring Boot), REST APIs
-- **Database (Target):** PostgreSQL or MySQL
-
-## 🚀 How to Run
-
-1.  No build tools are needed.
-2.  Simply open the `index.html` file in any modern web browser (like Chrome, Firefox, or Edge).
-3.  The application is self-contained and will run directly.
-
----
--->
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StudiConnect - Online Group Study</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>StudiConnect - Online Group Study (Fixed)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/phosphor-icons"></script>
@@ -57,7 +12,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
         .hidden { display: none !important; }
         #video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
         .video-participant { aspect-ratio: 16 / 10; overflow: hidden; border-radius: 0.5rem; background-color: #2c2c2e; position: relative; transition: all 0.3s ease; }
-        .video-participant video, .video-participant img { width: 100%; height: 100%; object-fit: cover; }
+        .video-participant video, .video-participant img { width: 100%; height: 100%; object-fit: cover; display:block; }
         .video-participant .name-tag { position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.5); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
         .control-button { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: 0.75rem; background-color: #374151; color: white; cursor: pointer; transition: all 0.2s ease; border: none; }
         .control-button:hover { background-color: #4b5563; }
@@ -86,39 +41,25 @@ While this is a frontend-only prototype, it is built with a specific backend arc
 </head>
 <body class="bg-gray-900 text-gray-200">
 
-    <div id="app-container" class="min-h-screen flex flex-col">
-        <!-- All views are dynamically managed by JS -->
-    </div>
-    
-    <!-- Toast Notification Container -->
+    <div id="app-container" class="min-h-screen flex flex-col"></div>
     <div id="toast-container"></div>
-    
+
     <script>
     document.addEventListener('DOMContentLoaded', () => {
     // #################################################################
     // #####              SIMULATED GLOBAL STATE                   #####
     // #################################################################
-    // To simulate a shared backend, we use localStorage. This allows multiple
-    // browser tabs on the same computer to share the same state, making the
-    // multi-user experience feel real. In a production app, this would be
-    // replaced with a real database and WebSocket server.
     const STORAGE_KEY = 'studiConnectState';
-    
     let mockState;
-
     function loadStateFromStorage() {
         const storedState = localStorage.getItem(STORAGE_KEY);
         if (storedState) {
             mockState = JSON.parse(storedState);
         } else {
-            // Initialize with default state if nothing is in storage
             mockState = {
                 users: [{ id: 1, name: 'Student', email: 'student@example.com', password: 'password123' }],
                 rooms: {
-                    'DEMO123': {
-                        password: null, participants: [],
-                        files: [{ name: 'Syllabus.pdf' }, { name: 'Chapter1_Notes.docx' }]
-                    },
+                    'DEMO123': { password: null, participants: [], files: [{ name: 'Syllabus.pdf' }, { name: 'Chapter1_Notes.docx' }] },
                     'SECRET': { password: 'study', participants: [], files: [] }
                 },
                 currentUser: null,
@@ -127,19 +68,21 @@ While this is a frontend-only prototype, it is built with a specific backend arc
             saveStateToStorage();
         }
     }
-    
-    function saveStateToStorage() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(mockState));
-    }
+    function saveStateToStorage() { localStorage.setItem(STORAGE_KEY, JSON.stringify(mockState)); }
 
     // Listen for changes from other tabs
     window.addEventListener('storage', (event) => {
         if (event.key === STORAGE_KEY) {
-            mockState = JSON.parse(event.newValue);
-            // If currently in a room, re-render participants to reflect changes
-            if (currentRoomId && mockState.rooms[currentRoomId]) {
+            try {
+                mockState = JSON.parse(event.newValue);
+            } catch (e) {
+                console.error('Failed parsing updated storage', e);
+                return;
+            }
+            if (currentRoomId && mockState.rooms && mockState.rooms[currentRoomId]) {
+                // Update participants display when room changed in other tab
                 renderParticipants();
-            } else if (document.getElementById('dashboard-view')) { // If on dashboard, refresh public rooms
+            } else if (document.getElementById('dashboard-view')) {
                 renderPublicRooms();
             }
         }
@@ -150,14 +93,13 @@ While this is a frontend-only prototype, it is built with a specific backend arc
     // #################################################################
     const appContainer = document.getElementById('app-container');
     const toastContainer = document.getElementById('toast-container');
-    
-    const templates = {
-        login: `...`, // Redacted for brevity, see full code below
-        signup: `...`,
-        dashboard: `...`,
-        lobby: `...`,
-        room: `...`,
-    };
+
+    const templates = {};
+    templates.login = `...`;
+    templates.signup = `...`;
+    templates.dashboard = `...`;
+    templates.lobby = `...`;
+    templates.room = `...`;
 
     templates.login = `
         <div id="auth-view" class="flex-grow flex items-center justify-center p-4">
@@ -179,7 +121,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
                 </form>
             </div>
         </div>`;
-    
+
     templates.signup = `
         <div id="signup-view" class="flex-grow flex items-center justify-center p-4">
             <div class="w-full max-w-md bg-gray-800 p-8 rounded-2xl shadow-lg border border-gray-700">
@@ -214,9 +156,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
                 </div>
                 <div>
                     <h3 class="font-semibold text-lg mb-4">Public Rooms</h3>
-                    <div id="public-rooms-list" class="space-y-3 max-h-48 overflow-y-auto pr-2">
-                        <!-- Public rooms will be dynamically inserted here -->
-                    </div>
+                    <div id="public-rooms-list" class="space-y-3 max-h-48 overflow-y-auto pr-2"></div>
                 </div>
             </div>
         </div>`;
@@ -236,7 +176,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
                 </div>
             </div>
         </div>`;
-    
+
     templates.room = `
         <main id="room-view" class="flex-grow flex flex-col md:flex-row h-screen">
             <div class="flex-grow flex flex-col p-4 bg-gray-900">
@@ -274,17 +214,13 @@ While this is a frontend-only prototype, it is built with a specific backend arc
     // #################################################################
     // #####                  UI RENDERING & LOGIC                 #####
     // #################################################################
-
-    // --- App State ---
     let localStream;
     let currentRoomId = null;
     let timerInterval;
     let isDrawing = false;
-    let participantStates = {}; // { id: { micOn: true, camOn: true, handRaised: false } }
+    let participantStates = {}; // keys normalized to strings
 
-    // --- Core UI Functions ---
     function renderView(template) { appContainer.innerHTML = template; }
-
     function showToast(message, type = 'success') {
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
@@ -296,7 +232,6 @@ While this is a frontend-only prototype, it is built with a specific backend arc
             toast.addEventListener('transitionend', () => toast.remove());
         }, 3000);
     }
-    
     function createModal(id, title, content, footer) {
         const modal = document.createElement('div');
         modal.id = id;
@@ -321,13 +256,11 @@ While this is a frontend-only prototype, it is built with a specific backend arc
         document.getElementById('login-form').onsubmit = handleLogin;
         document.getElementById('show-signup').onclick = (e) => { e.preventDefault(); initSignup(); };
     }
-
     function initSignup() {
         renderView(templates.signup);
         document.getElementById('signup-form').onsubmit = handleSignup;
         document.getElementById('show-login').onclick = (e) => { e.preventDefault(); initAuth(); };
     }
-    
     function handleLogin(e) {
         e.preventDefault();
         const email = e.target.elements['login-email'].value;
@@ -343,7 +276,6 @@ While this is a frontend-only prototype, it is built with a specific backend arc
             errorEl.classList.remove('hidden');
         }
     }
-    
     function handleSignup(e) {
         e.preventDefault();
         const name = e.target.elements['signup-name'].value;
@@ -354,14 +286,15 @@ While this is a frontend-only prototype, it is built with a specific backend arc
             errorEl.textContent = 'An account with this email already exists.';
             errorEl.classList.remove('hidden');
         } else {
-            mockState.users.push({ id: mockState.nextUserId++, name, email, password });
-            mockState.nextUserId++;
+            // use nextUserId and increment once
+            const id = mockState.nextUserId++;
+            mockState.users.push({ id, name, email, password });
             saveStateToStorage();
             showToast('Account created! Please log in.');
             initAuth();
         }
     }
-    
+
     // --- Dashboard Flow ---
     function initDashboard() {
         renderView(templates.dashboard);
@@ -375,18 +308,14 @@ While this is a frontend-only prototype, it is built with a specific backend arc
         document.getElementById('join-room-btn').onclick = handleJoinRoomAttempt;
         renderPublicRooms();
     }
-
     function renderPublicRooms() {
         const listContainer = document.getElementById('public-rooms-list');
         if (!listContainer) return;
-
         const publicRooms = Object.entries(mockState.rooms).filter(([id, room]) => !room.password);
-
         if (publicRooms.length === 0) {
             listContainer.innerHTML = `<p class="text-gray-400 text-center py-4">No public rooms are active. Why not start one?</p>`;
             return;
         }
-
         listContainer.innerHTML = '';
         publicRooms.forEach(([roomId, room]) => {
             const roomElement = document.createElement('div');
@@ -400,15 +329,10 @@ While this is a frontend-only prototype, it is built with a specific backend arc
             `;
             listContainer.appendChild(roomElement);
         });
-
         document.querySelectorAll('.join-public-room-btn').forEach(btn => {
-            btn.onclick = (e) => {
-                const id = e.currentTarget.dataset.roomId;
-                initLobby(id);
-            };
+            btn.onclick = (e) => { const id = e.currentTarget.dataset.roomId; initLobby(id); };
         });
     }
-    
     function showCreateRoomModal() {
         const modal = createModal('create-room-modal', 'Create Study Room',
             `<div class="space-y-4">
@@ -425,17 +349,11 @@ While this is a frontend-only prototype, it is built with a specific backend arc
             initLobby(newRoomId);
         };
     }
-    
     function handleJoinRoomAttempt() {
         const roomId = document.getElementById('room-code-input').value.trim().toUpperCase();
         if (!roomId) return;
-        
         const room = mockState.rooms[roomId];
-        if (!room) {
-            showToast('Room not found.', 'error');
-            return;
-        }
-
+        if (!room) { showToast('Room not found.', 'error'); return; }
         if (room.password) {
             const modal = createModal('password-modal', `Enter Password for Room ${roomId}`,
                 `<div><label for="join-password-input" class="sr-only">Password</label><input type="password" id="join-password-input" class="w-full px-4 py-2 bg-gray-700 rounded-lg" placeholder="Room Password"></div>`,
@@ -443,16 +361,10 @@ While this is a frontend-only prototype, it is built with a specific backend arc
             );
             modal.querySelector('#submit-password-btn').onclick = () => {
                 const enteredPassword = modal.querySelector('#join-password-input').value;
-                if (enteredPassword === room.password) {
-                    modal.remove();
-                    initLobby(roomId);
-                } else {
-                    showToast('Incorrect password.', 'error');
-                }
+                if (enteredPassword === room.password) { modal.remove(); initLobby(roomId); }
+                else showToast('Incorrect password.', 'error');
             };
-        } else {
-            initLobby(roomId);
-        }
+        } else initLobby(roomId);
     }
 
     // --- Lobby Flow ---
@@ -460,7 +372,6 @@ While this is a frontend-only prototype, it is built with a specific backend arc
         renderView(templates.lobby);
         document.getElementById('lobby-room-id').textContent = roomId;
         document.getElementById('lobby-name-input').value = mockState.currentUser.name;
-        
         const videoPreview = document.getElementById('lobby-video-preview');
         const micBtn = document.getElementById('lobby-mic-btn');
         const camBtn = document.getElementById('lobby-cam-btn');
@@ -468,25 +379,29 @@ While this is a frontend-only prototype, it is built with a specific backend arc
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             videoPreview.srcObject = localStream;
-            participantStates[mockState.currentUser.id] = { micOn: true, camOn: true, handRaised: false };
+            participantStates[String(mockState.currentUser.id)] = { micOn: true, camOn: true, handRaised: false };
         } catch (err) {
             console.error(err);
             videoPreview.parentElement.innerHTML = `<p class="text-gray-400">Could not access camera/microphone.</p>`;
-            participantStates[mockState.currentUser.id] = { micOn: false, camOn: false, handRaised: false };
+            participantStates[String(mockState.currentUser.id)] = { micOn: false, camOn: false, handRaised: false };
         }
-        
+
         micBtn.onclick = () => {
-            const micOn = !participantStates[mockState.currentUser.id].micOn;
-            participantStates[mockState.currentUser.id].micOn = micOn;
-            if (localStream) localStream.getAudioTracks()[0].enabled = micOn;
+            const key = String(mockState.currentUser.id);
+            participantStates[key] = participantStates[key] || { micOn: true, camOn: true, handRaised: false };
+            const micOn = !participantStates[key].micOn;
+            participantStates[key].micOn = micOn;
+            if (localStream && localStream.getAudioTracks().length) localStream.getAudioTracks()[0].enabled = micOn;
             micBtn.classList.toggle('active', micOn);
             micBtn.querySelector('i').className = micOn ? 'ph ph-microphone' : 'ph ph-microphone-slash';
         };
 
         camBtn.onclick = () => {
-            const camOn = !participantStates[mockState.currentUser.id].camOn;
-            participantStates[mockState.currentUser.id].camOn = camOn;
-            if (localStream) localStream.getVideoTracks()[0].enabled = camOn;
+            const key = String(mockState.currentUser.id);
+            participantStates[key] = participantStates[key] || { micOn: true, camOn: true, handRaised: false };
+            const camOn = !participantStates[key].camOn;
+            participantStates[key].camOn = camOn;
+            if (localStream && localStream.getVideoTracks().length) localStream.getVideoTracks()[0].enabled = camOn;
             camBtn.classList.toggle('active', camOn);
             videoPreview.style.display = camOn ? 'block' : 'none';
             camBtn.querySelector('i').className = camOn ? 'ph ph-camera' : 'ph ph-camera-slash';
@@ -494,6 +409,7 @@ While this is a frontend-only prototype, it is built with a specific backend arc
 
         document.getElementById('lobby-join-now-btn').onclick = () => {
             mockState.currentUser.name = document.getElementById('lobby-name-input').value; // Update name
+            saveStateToStorage();
             startRoom(roomId);
         };
     }
@@ -502,23 +418,27 @@ While this is a frontend-only prototype, it is built with a specific backend arc
     function startRoom(roomId) {
         currentRoomId = roomId;
         renderView(templates.room);
-        
-        // Add user to room state if not already there
+
+        // Ensure participants array exists
+        if (!mockState.rooms[roomId]) mockState.rooms[roomId] = { password: null, participants: [], files: [] };
+
+        // Add user to room state if not already there (compare by id)
         if (!mockState.rooms[roomId].participants.some(p => p.id === mockState.currentUser.id)) {
-            mockState.rooms[roomId].participants.push(mockState.currentUser);
+            // push a shallow copy so storage changes are clear
+            mockState.rooms[roomId].participants.push({ id: mockState.currentUser.id, name: mockState.currentUser.name, email: mockState.currentUser.email });
         }
 
-        // Add ADMIN bot if it's the first real user joining
-        if (mockState.rooms[roomId].participants.filter(p => !p.id.startsWith('sim_')).length === 1 && !mockState.rooms[roomId].participants.some(p => p.id === 'sim_admin')) {
-            const adminId = 'sim_admin';
-            mockState.rooms[roomId].participants.push({ id: adminId, name: 'ADMIN' });
-            participantStates[adminId] = { micOn: true, camOn: true, handRaised: false };
+        // Add ADMIN bot if it's the first real user joining (guard String conversion)
+        const participants = mockState.rooms[roomId].participants;
+        const realUserCount = participants.filter(p => !String(p.id).startsWith('sim_')).length;
+        if (realUserCount === 1 && !participants.some(p => p.id === 'sim_admin')) {
+            participants.push({ id: 'sim_admin', name: 'ADMIN' });
+            participantStates[String('sim_admin')] = { micOn: true, camOn: true, handRaised: false };
         }
-        
+
         saveStateToStorage();
-        
+
         document.getElementById('room-id-display').textContent = roomId;
-        
         renderParticipants();
         renderFiles();
         bindRoomControls();
@@ -528,69 +448,83 @@ While this is a frontend-only prototype, it is built with a specific backend arc
 
     function stopRoom() {
         if (localStream) localStream.getTracks().forEach(track => track.stop());
-        
         if (mockState.rooms[currentRoomId] && mockState.currentUser) {
             mockState.rooms[currentRoomId].participants = mockState.rooms[currentRoomId].participants.filter(p => p.id !== mockState.currentUser.id);
             saveStateToStorage();
         }
-
         localStream = null;
         currentRoomId = null;
         stopTimer();
         initDashboard();
     }
-    
+
     function renderParticipants() {
         if (!currentRoomId || !mockState.rooms[currentRoomId]) return;
-
         const videoGrid = document.getElementById('video-grid');
         const participantsList = document.getElementById('participants-list');
-        const participants = mockState.rooms[currentRoomId].participants;
-
+        const participants = mockState.rooms[currentRoomId].participants || [];
         videoGrid.innerHTML = '';
         participantsList.innerHTML = '';
         document.getElementById('participant-count').textContent = participants.length;
-        
-        // Speaker view logic
-        const speakerRail = document.createElement('div');
-        speakerRail.id = 'speaker-rail';
-        const speakerParticipant = participants[0]; // Simple: first person is speaker
 
+        // ensure participantStates exist for each
         participants.forEach(p => {
-            const isLocal = p.id === mockState.currentUser.id;
-            const state = participantStates[p.id] || { micOn: true, camOn: true, handRaised: false };
-            
-            // Render video tile
+            const key = String(p.id);
+            if (!participantStates[key]) participantStates[key] = { micOn: true, camOn: true, handRaised: false };
+        });
+
+        // Speaker view: choose first (simple)
+        const speakerParticipant = participants[0];
+
+        // Create DOM elements safely (avoid innerHTML that kills <video>)
+        participants.forEach(p => {
+            const isLocal = (p.id === mockState.currentUser.id);
+            const state = participantStates[String(p.id)] || { micOn: true, camOn: true, handRaised: false };
+
             const videoContainer = document.createElement('div');
             videoContainer.className = 'video-participant';
             if (isLocal) videoContainer.classList.add('border-2', 'border-indigo-500');
-            
             if (p === speakerParticipant) videoContainer.classList.add('speaker');
 
             if (isLocal && localStream) {
                 const video = document.createElement('video');
                 video.autoplay = true;
                 video.muted = true;
-                video.srcObject = localStream;
+                video.playsInline = true;
+                try { video.srcObject = localStream; } catch (e) { console.warn('Could not set srcObject', e); }
                 videoContainer.appendChild(video);
             } else {
                 const img = document.createElement('img');
-                img.src = `https://placehold.co/400x250/2c2c2e/ffffff?text=${p.name}`;
+                // safe placeholder image
+                img.src = `https://placehold.co/400x250/2c2c2e/ffffff?text=${encodeURIComponent(p.name)}`;
+                img.alt = p.name;
                 videoContainer.appendChild(img);
             }
-            videoContainer.innerHTML += `<div class="name-tag">${p.name} ${isLocal ? '(You)' : ''}</div>`;
-            
+
+            // name tag added via DOM (avoids innerHTML rewrite)
+            const nameTag = document.createElement('div');
+            nameTag.className = 'name-tag';
+            nameTag.textContent = `${p.name}${isLocal ? ' (You)' : ''}`;
+            videoContainer.appendChild(nameTag);
+
             if (videoGrid.classList.contains('speaker-view') && p !== speakerParticipant) {
-                speakerRail.appendChild(videoContainer);
+                // ensure we have a speaker rail
+                let rail = document.getElementById('speaker-rail');
+                if (!rail) {
+                    rail = document.createElement('div');
+                    rail.id = 'speaker-rail';
+                }
+                rail.appendChild(videoContainer);
+                if (!document.getElementById('speaker-rail')) videoGrid.appendChild(rail);
             } else {
                 videoGrid.appendChild(videoContainer);
             }
 
-            // Render list item
+            // Participant list item creation
             const li = document.createElement('li');
             li.className = 'flex items-center justify-between';
             li.innerHTML = `
-                <div class="flex items-center"><span class="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center font-bold text-sm mr-3">${p.name.charAt(0)}</span><span class="font-medium">${p.name} ${isLocal ? '(You)' : ''}</span></div>
+                <div class="flex items-center"><span class="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center font-bold text-sm mr-3">${(p.name && p.name.charAt(0)) || '?'}</span><span class="font-medium">${p.name} ${isLocal ? '(You)' : ''}</span></div>
                 <div class="flex items-center gap-3">
                    ${state.handRaised ? '<i class="ph ph-hand text-yellow-400 text-xl animate-pulse"></i>' : ''}
                    <i class="ph ${state.micOn ? 'ph-microphone' : 'ph-microphone-slash text-red-400'} text-xl"></i>
@@ -598,20 +532,21 @@ While this is a frontend-only prototype, it is built with a specific backend arc
             participantsList.appendChild(li);
         });
 
-        if (videoGrid.classList.contains('speaker-view')) {
-             videoGrid.appendChild(speakerRail);
+        // if speaker-view and we created a rail earlier, ensure it's present
+        const existingRail = document.getElementById('speaker-rail');
+        if (videoGrid.classList.contains('speaker-view') && existingRail && !videoGrid.contains(existingRail)) {
+            videoGrid.appendChild(existingRail);
         }
     }
-    
+
     function renderFiles() {
         if (!currentRoomId || !mockState.rooms[currentRoomId]) return;
         const filesList = document.getElementById('files-list');
         const noFilesMsg = document.getElementById('no-files-msg');
-        const files = mockState.rooms[currentRoomId].files;
+        const files = mockState.rooms[currentRoomId].files || [];
         filesList.innerHTML = '';
-        if (files.length === 0) {
-            noFilesMsg.classList.remove('hidden');
-        } else {
+        if (files.length === 0) { noFilesMsg.classList.remove('hidden'); }
+        else {
             noFilesMsg.classList.add('hidden');
             files.forEach(file => {
                 const li = document.createElement('li');
@@ -625,7 +560,6 @@ While this is a frontend-only prototype, it is built with a specific backend arc
     }
 
     function bindRoomControls() {
-        // Main controls
         document.getElementById('leave-btn').onclick = stopRoom;
         document.getElementById('mic-btn').onclick = toggleMic;
         document.getElementById('cam-btn').onclick = toggleCam;
@@ -638,13 +572,10 @@ While this is a frontend-only prototype, it is built with a specific backend arc
             showToast(`${fileName} shared.`);
         };
         document.getElementById('raise-hand-btn').onclick = toggleHand;
-
-        // Header controls
         document.getElementById('copy-link-btn').onclick = copyInviteLink;
         document.getElementById('qr-code-btn').onclick = showInviteQR;
         document.getElementById('layout-toggle-btn').onclick = toggleLayout;
 
-        // Side panel tabs
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.onclick = (e) => {
                 const tab = e.currentTarget.dataset.tab;
@@ -661,48 +592,46 @@ While this is a frontend-only prototype, it is built with a specific backend arc
     }
 
     function toggleMic() {
-        const state = participantStates[mockState.currentUser.id];
-        state.micOn = !state.micOn;
-        if (localStream) localStream.getAudioTracks()[0].enabled = state.micOn;
-        document.getElementById('mic-btn').classList.toggle('active', state.micOn);
-        document.getElementById('mic-btn').querySelector('i').className = state.micOn ? 'ph ph-microphone' : 'ph ph-microphone-slash';
+        const key = String(mockState.currentUser.id);
+        participantStates[key] = participantStates[key] || { micOn: true, camOn: true, handRaised: false };
+        participantStates[key].micOn = !participantStates[key].micOn;
+        if (localStream && localStream.getAudioTracks().length) localStream.getAudioTracks()[0].enabled = participantStates[key].micOn;
+        document.getElementById('mic-btn').classList.toggle('active', participantStates[key].micOn);
+        const icon = participantStates[key].micOn ? 'ph ph-microphone' : 'ph ph-microphone-slash';
+        document.getElementById('mic-btn').querySelector('i').className = icon;
         renderParticipants();
     }
-    
+
     function toggleCam() {
-        const state = participantStates[mockState.currentUser.id];
-        state.camOn = !state.camOn;
-        if (localStream) localStream.getVideoTracks()[0].enabled = state.camOn;
-        document.getElementById('cam-btn').classList.toggle('active', state.camOn);
-        document.getElementById('cam-btn').querySelector('i').className = state.camOn ? 'ph ph-camera' : 'ph ph-camera-slash';
+        const key = String(mockState.currentUser.id);
+        participantStates[key] = participantStates[key] || { micOn: true, camOn: true, handRaised: false };
+        participantStates[key].camOn = !participantStates[key].camOn;
+        if (localStream && localStream.getVideoTracks().length) localStream.getVideoTracks()[0].enabled = participantStates[key].camOn;
+        document.getElementById('cam-btn').classList.toggle('active', participantStates[key].camOn);
+        const icon = participantStates[key].camOn ? 'ph ph-camera' : 'ph ph-camera-slash';
+        document.getElementById('cam-btn').querySelector('i').className = icon;
     }
-    
+
     function toggleHand() {
-        const state = participantStates[mockState.currentUser.id];
-        state.handRaised = !state.handRaised;
-        document.getElementById('raise-hand-btn').classList.toggle('active', state.handRaised);
+        const key = String(mockState.currentUser.id);
+        participantStates[key] = participantStates[key] || { micOn: true, camOn: true, handRaised: false };
+        participantStates[key].handRaised = !participantStates[key].handRaised;
+        document.getElementById('raise-hand-btn').classList.toggle('active', participantStates[key].handRaised);
         renderParticipants();
     }
-    
+
     function toggleLayout() {
         const grid = document.getElementById('video-grid');
         const icon = document.getElementById('layout-toggle-btn').querySelector('i');
         grid.classList.toggle('speaker-view');
-        if (grid.classList.contains('speaker-view')) {
-            icon.className = 'ph ph-speaker-high text-xl';
-        } else {
-            icon.className = 'ph ph-grid-four text-xl';
-        }
+        if (grid.classList.contains('speaker-view')) icon.className = 'ph ph-speaker-high text-xl';
+        else icon.className = 'ph ph-grid-four text-xl';
         renderParticipants();
     }
 
     function copyInviteLink() {
         const link = `https://studiconnect.app/join?room=${currentRoomId}`;
-        navigator.clipboard.writeText(link).then(() => {
-            showToast('Invite link copied to clipboard!');
-        }, () => {
-            showToast('Failed to copy link.', 'error');
-        });
+        navigator.clipboard.writeText(link).then(() => showToast('Invite link copied to clipboard!'), () => showToast('Failed to copy link.', 'error'));
     }
 
     function showInviteQR() {
@@ -722,8 +651,8 @@ While this is a frontend-only prototype, it is built with a specific backend arc
              </div>`, ''
         );
     }
-    
-    // --- Timer ---
+
+    // Timer
     function startTimer() {
         let seconds = 0;
         const timerEl = document.getElementById('time-tracker');
@@ -739,11 +668,10 @@ While this is a frontend-only prototype, it is built with a specific backend arc
     }
     function stopTimer() { clearInterval(timerInterval); }
 
-    // --- Whiteboard ---
+    // Whiteboard (simple visibility toggle)
     function setupWhiteboard() {
         const whiteboardContainer = document.getElementById('whiteboard-container');
         if (!whiteboardContainer) return;
-        
         const videoGridContainer = document.getElementById('video-grid-container');
         const whiteboardBtn = document.getElementById('whiteboard-btn');
         whiteboardBtn.onclick = () => {
@@ -759,8 +687,8 @@ While this is a frontend-only prototype, it is built with a specific backend arc
     // #################################################################
     loadStateFromStorage();
     initAuth();
-});
+
+    }); // DOMContentLoaded
     </script>
 </body>
 </html>
-
